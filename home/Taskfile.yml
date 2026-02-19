@@ -1,0 +1,85 @@
+version: "3"
+
+tasks:
+  lint:
+    dir: "{{.USER_WORKING_DIR}}"
+    desc: Detect project type and run linter
+    silent: true
+    deps: [ensure-lint-tools]
+    cmd: |
+      if test -f pyproject.toml; then
+        echo "Running ruff check..."
+        ruff check .
+      elif test -f go.mod; then
+        echo "Running golangci-lint run..."
+        golangci-lint run ./...
+      else
+        echo "No supported project detected (Python or Go)"
+        exit 1
+      fi
+  lint-fix:
+    dir: "{{.USER_WORKING_DIR}}"
+    desc: Detect project type and run linter
+    silent: true
+    deps: [ensure-lint-tools]
+    cmd: |
+      if test -f pyproject.toml; then
+        echo "Running ruff check --fix..."
+        ruff check --fix .
+      elif test -f go.mod; then
+        echo "Running golangci-lint run --fix..."
+        golangci-lint run ./... --fix
+      else
+        echo "No supported project detected (Python or Go)"
+        exit 1
+      fi
+
+  ensure-lint-tools:
+    dir: "{{.USER_WORKING_DIR}}"
+    desc: Ensure lint tools are installed
+    internal: true
+    silent: true
+    cmd: |
+      if test -f go.mod; then
+        if ! command -v golangci-lint >/dev/null 2>&1; then
+          echo "Installing golangci-lint..."
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        fi
+      fi
+
+      if test -f pyproject.toml; then
+        if ! command -v uv >/dev/null 2>&1; then
+          echo "Installing uv..."
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+        fi
+        if ! command -v ruff >/dev/null 2>&1; then
+          echo "Installing ruff..."
+          uv tool install ruff@latest
+        fi
+      fi
+
+  test:
+    dir: "{{.USER_WORKING_DIR}}"
+    desc: Run tests on the project
+    silent: true
+    cmd: |
+      if test -f go.mod; then
+        echo "Running tests on Go project..."
+        go test -count=1 ./...
+      elif test -f pyproject.toml; then
+        echo "Running tests on Python project (pytest)..."
+        uv add pytest --dev
+        uv run pytest
+      else
+        echo "No supported project detected (Python or Go)"
+        exit 1
+      fi
+  is-go-project:
+    dir: "{{.USER_WORKING_DIR}}"
+    desc: Check if the current directory is a Go project
+    internal: true
+    silent: true
+    cmd: |
+      echo "Checking if the current directory is a Go project..."
+      pwd
+      test -f go.mod
